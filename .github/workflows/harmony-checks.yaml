@@ -45,8 +45,24 @@ jobs:
           git -C "$RUNNER_TOOL_CACHE/flutter-ohos" apply "$GITHUB_WORKSPACE/.github/flutter_ohos.patch"
           echo "$RUNNER_TOOL_CACHE/flutter-ohos/bin" >> "$GITHUB_PATH"
           echo "$RUNNER_TOOL_CACHE/flutter-ohos/bin/cache/dart-sdk/bin" >> "$GITHUB_PATH"
+      - name: Restore Flutter and locked dependency cache
+        id: flutter-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ${{ runner.tool_cache }}/flutter-ohos/bin/cache
+            ~/.pub-cache
+          key: ${{ runner.os }}-flutter-oh-3.44.10-${{ hashFiles('pubspec.lock', '.github/flutter_ohos.patch') }}
       - name: Locked dependencies
         run: flutter pub get --enforce-lockfile
+      - name: Save installed Flutter and locked dependencies
+        if: steps.flutter-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ runner.tool_cache }}/flutter-ohos/bin/cache
+            ~/.pub-cache
+          key: ${{ steps.flutter-cache.outputs.cache-primary-key }}
       - name: Analyze
         run: flutter analyze --no-fatal-infos
       - name: Flutter tests

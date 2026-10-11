@@ -21,7 +21,7 @@ export class VpnLifecycle {
         await acquireResources(() => request !== this.sequence)
       } catch (err) {
         await this.releaseResources()
-        throw err
+        throw err as Error
       }
       if (request !== this.sequence) {
         await this.releaseResources()
