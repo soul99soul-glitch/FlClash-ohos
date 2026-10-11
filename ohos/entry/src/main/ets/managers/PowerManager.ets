@@ -16,7 +16,11 @@ export default class PowerManager {
   }
 
   unsubscribe(): Promise<void> {
-    commonEventManager.unsubscribe(this.subscriber)
-    return Promise.resolve()
+    return new Promise((resolve, reject) => {
+      commonEventManager.unsubscribe(this.subscriber, (err: Error) => {
+        if (err) reject(err)
+        else resolve()
+      })
+    })
   }
 }

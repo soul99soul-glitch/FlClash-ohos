@@ -32,7 +32,7 @@ jobs:
           go-version: '1.26.9'
           cache-dependency-path: core/go.sum
       - name: VPN lifecycle and Flutter channel contracts
-        run: node --experimental-vm-modules --test scripts/test-ohos-lifecycle.mjs scripts/test-ohos-service.mjs
+        run: node --experimental-vm-modules --test scripts/test-ohos-lifecycle.mjs scripts/test-ohos-service.mjs scripts/test-ohos-power.mjs
       - name: Native bridge contracts
         run: OHOS_NAPI_INCLUDE_DIR="$OHOS_NDK_HOME/native/sysroot/usr/include" bash ohos/core/test/run_native_bridge_tests.sh
       - name: Socket protection and loopback dialing

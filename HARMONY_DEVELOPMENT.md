@@ -18,7 +18,7 @@
 PUB_HOSTED_URL=https://pub.flutter-io.cn flutter pub get --enforce-lockfile
 flutter analyze --no-pub --no-fatal-infos
 flutter test --no-pub --reporter expanded
-node --experimental-vm-modules --test scripts/test-ohos-lifecycle.mjs scripts/test-ohos-service.mjs
+node --experimental-vm-modules --test scripts/test-ohos-lifecycle.mjs scripts/test-ohos-service.mjs scripts/test-ohos-power.mjs
 bash ohos/core/test/run_native_bridge_tests.sh
 ```
 
