@@ -1050,6 +1050,10 @@ class MessageLookup extends MessageLookupByLibrary {
     "vpnEnableDesc": MessageLookupByLibrary.simpleMessage(
       "Auto routes all system traffic through VpnService",
     ),
+    "vpnStartFailed": MessageLookupByLibrary.simpleMessage(
+      "VPN connection failed",
+    ),
+    "vpnStopFailed": MessageLookupByLibrary.simpleMessage("Failed to stop VPN"),
     "vpnTip": MessageLookupByLibrary.simpleMessage(
       "Changes take effect after restarting the VPN",
     ),

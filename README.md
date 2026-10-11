@@ -6,6 +6,8 @@
 
 ## FlClash
 
+This fork continues HarmonyOS development from [tljk/FlClash-ohos](https://github.com/tljk/FlClash-ohos). The first iteration improves VPN lifecycle and socket protection; see [development and validation notes](HARMONY_DEVELOPMENT.md). Device validation is still pending.
+
 [![Downloads](https://img.shields.io/github/downloads/tljk/FlClash-ohos/total?style=flat-square&logo=github)](https://github.com/tljk/FlClash-ohos/releases/)[![Last Version](https://img.shields.io/github/release/tljk/FlClash-ohos/all.svg?style=flat-square)](https://github.com/tljk/FlClash-ohos/releases/)[![License](https://img.shields.io/github/license/tljk/FlClash-ohos?style=flat-square)](LICENSE)
 
 [![Channel](https://img.shields.io/badge/Telegram-Channel-blue?style=flat-square&logo=telegram)](https://t.me/FlClash_ohos)

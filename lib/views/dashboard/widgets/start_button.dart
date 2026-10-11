@@ -17,6 +17,7 @@ class _StartButtonState extends ConsumerState<StartButton>
   AnimationController? _controller;
   late Animation<double> _animation;
   bool isStart = false;
+  int _request = 0;
 
   @override
   void initState() {
@@ -47,12 +48,20 @@ class _StartButtonState extends ConsumerState<StartButton>
   }
 
   void handleSwitchStart() {
+    final request = ++_request;
     isStart = !isStart;
     updateController();
-    debouncer.call(FunctionTag.updateStatus, () {
-      globalState.container
-          .read(setupActionProvider.notifier)
-          .updateStatus(isStart, isInit: !ref.read(initProvider));
+    final requestedStart = isStart;
+    debouncer.call(FunctionTag.updateStatus, () async {
+      await globalState.safeRun(() async {
+        await globalState.container
+            .read(setupActionProvider.notifier)
+            .updateStatus(requestedStart, isInit: !ref.read(initProvider));
+      });
+      if (mounted && request == _request) {
+        isStart = ref.read(isStartProvider);
+        updateController();
+      }
     }, duration: commonDuration);
   }
 

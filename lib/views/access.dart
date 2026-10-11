@@ -363,11 +363,12 @@ class _AccessViewState extends ConsumerState<AccessView> {
               icon: Icons.emergency_outlined,
               label: appLocalizations.action,
               subItems: [
-                PopupMenuItemData(
-                  icon: Icons.auto_awesome,
-                  label: appLocalizations.intelligentSelected,
-                  onPressed: _intelligentSelected,
-                ),
+                if (!system.isOhos)
+                  PopupMenuItemData(
+                    icon: Icons.auto_awesome,
+                    label: appLocalizations.intelligentSelected,
+                    onPressed: _intelligentSelected,
+                  ),
                 PopupMenuItemData(
                   icon: Icons.content_copy,
                   label: appLocalizations.clipboardExport,

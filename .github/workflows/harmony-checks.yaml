@@ -1,0 +1,70 @@
+name: Harmony checks
+
+on:
+  push:
+    branches: ['improve/**']
+  pull_request:
+    branches: ['v0.8.94-ohos']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      PUB_HOSTED_URL: https://pub.flutter-io.cn
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Setup OpenHarmony SDK
+        uses: ErBWs/setup-ohos@v2.0.0
+        with:
+          version: 26.0.0.821
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.9'
+          cache-dependency-path: core/go.sum
+      - name: VPN lifecycle and Flutter channel contracts
+        run: node --experimental-vm-modules --test scripts/test-ohos-lifecycle.mjs scripts/test-ohos-service.mjs
+      - name: Native bridge contracts
+        run: OHOS_NAPI_INCLUDE_DIR="$OHOS_NDK_HOME/native/sysroot/usr/include" bash ohos/core/test/run_native_bridge_tests.sh
+      - name: Socket protection and loopback dialing
+        working-directory: core
+        run: go test -race -v socket_protection.go socket_protection_test.go
+      - name: Setup Flutter OH
+        run: |
+          git clone -b 3.44.9+ohos-0.0.1-canary1 --depth 1 https://gitcode.com/CPF-Flutter/flutter_flutter.git "$RUNNER_TOOL_CACHE/flutter-ohos"
+          git -C "$RUNNER_TOOL_CACHE/flutter-ohos" tag 3.44.10
+          git -C "$RUNNER_TOOL_CACHE/flutter-ohos" apply "$GITHUB_WORKSPACE/.github/flutter_ohos.patch"
+          echo "$RUNNER_TOOL_CACHE/flutter-ohos/bin" >> "$GITHUB_PATH"
+          echo "$RUNNER_TOOL_CACHE/flutter-ohos/bin/cache/dart-sdk/bin" >> "$GITHUB_PATH"
+      - name: Locked dependencies
+        run: flutter pub get --enforce-lockfile
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos
+      - name: Flutter tests
+        run: flutter test --reporter expanded
+      - name: Build OpenHarmony Go toolchain
+        run: |
+          git clone -b release-branch.go1.24 --depth 1 https://gitcode.com/openharmony-sig/ohos_golang_go.git "$RUNNER_TOOL_CACHE/ohos-go"
+          cd "$RUNNER_TOOL_CACHE/ohos-go/src"
+          ./make.bash
+          echo "GOROOT=$RUNNER_TOOL_CACHE/ohos-go" >> "$GITHUB_ENV"
+          echo "$RUNNER_TOOL_CACHE/ohos-go/bin" >> "$GITHUB_PATH"
+      - name: Build ARM64 core
+        run: bash plugins/setup/buildkit/run_build_tool.sh ohos --arch=arm64
+      - name: Build unsigned Release HAP
+        run: flutter build hap --release --no-codesign --no-pub --target-platform ohos-arm64
+      - name: Upload HAP for device validation
+        uses: actions/upload-artifact@v4
+        with:
+          name: harmony-arm64-unsigned
+          path: ohos/entry/build/default/outputs/default/*unsigned.hap
+          if-no-files-found: error

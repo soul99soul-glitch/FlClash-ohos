@@ -38,7 +38,7 @@ type TunHandler struct {
 	limit *semaphore.Weighted
 }
 
-func (th *TunHandler) start(fd int, stack, address, dns string) {
+func (th *TunHandler) start(fd int, stack, address, dns string) bool {
 	runLock.Lock()
 	defer runLock.Unlock()
 	_ = th.limit.Acquire(context.TODO(), 4)
@@ -48,9 +48,10 @@ func (th *TunHandler) start(fd int, stack, address, dns string) {
 	if tunListener != nil {
 		log.Infoln("TUN address: %v", tunListener.Address())
 		th.listener = tunListener
-		return
+		return true
 	}
 	th.clear()
+	return false
 }
 
 func (th *TunHandler) close() {
@@ -71,15 +72,18 @@ func (th *TunHandler) clear() {
 	th.listener = nil
 }
 
-func (th *TunHandler) handleProtect(fd int) {
+func (th *TunHandler) handleProtect(fd int) error {
 	_ = th.limit.Acquire(context.Background(), 1)
 	defer th.limit.Release(1)
 
 	if th.listener == nil {
-		return
+		return nil
 	}
 
-	protect(th.callback, fd)
+	if !protect(th.callback, fd) {
+		return errProtectFailed
+	}
+	return nil
 }
 
 func (th *TunHandler) handleResolveProcess(source, target net.Addr) string {
@@ -110,9 +114,7 @@ func (th *TunHandler) initHook() {
 		if platform.ShouldBlockConnection() {
 			return errBlocked
 		}
-		return conn.Control(func(fd uintptr) {
-			tunHandler.handleProtect(int(fd))
-		})
+		return protectSocketConnection(conn, tunHandler.handleProtect)
 	}
 	process.DefaultPackageNameResolver = func(metadata *constant.Metadata) (string, error) {
 		src, dst := metadata.RawSrcAddr, metadata.RawDstAddr
@@ -129,9 +131,10 @@ func (th *TunHandler) removeHook() {
 }
 
 var (
-	tunLock    sync.Mutex
-	errBlocked = errors.New("blocked")
-	tunHandler *TunHandler
+	tunLock          sync.Mutex
+	errBlocked       = errors.New("blocked")
+	errProtectFailed = errors.New("VPN socket protection failed")
+	tunHandler       *TunHandler
 )
 
 func handleStopTun() {
@@ -142,7 +145,7 @@ func handleStopTun() {
 	}
 }
 
-func handleStartTun(callback unsafe.Pointer, fd int, stack, address, dns string) {
+func handleStartTun(callback unsafe.Pointer, fd int, stack, address, dns string) bool {
 	handleStopTun()
 	tunLock.Lock()
 	defer tunLock.Unlock()
@@ -151,8 +154,10 @@ func handleStartTun(callback unsafe.Pointer, fd int, stack, address, dns string)
 			callback: callback,
 			limit:    semaphore.NewWeighted(4),
 		}
-		tunHandler.start(fd, stack, address, dns)
+		return tunHandler.start(fd, stack, address, dns)
 	}
+	releaseObject(callback)
+	return false
 }
 
 func handleUpdateDns(value string) {
@@ -204,13 +209,16 @@ func invokeAction(callback unsafe.Pointer, paramsChar *C.char) {
 
 //export startTUN
 func startTUN(callback unsafe.Pointer, fd C.int, stackChar, addressChar, dnsChar *C.char) bool {
-	handleStartTun(callback, int(fd), takeCString(stackChar), takeCString(addressChar), takeCString(dnsChar))
+	started := handleStartTun(callback, int(fd), takeCString(stackChar), takeCString(addressChar), takeCString(dnsChar))
+	if !started && runtime.GOOS == "openharmony" {
+		return false
+	}
 	if !isRunning {
 		handleStartListener()
 	} else {
 		handleResetConnections()
 	}
-	return true
+	return started
 }
 
 //export quickSetup

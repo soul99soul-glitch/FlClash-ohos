@@ -554,5 +554,7 @@
   "geoSkipped": "{name} пропущено",
   "geoUpdated": "{name} обновлено",
   "secondsCount": "{count} секунд",
-  "entriesCount": "{count} записей"
+  "entriesCount": "{count} записей",
+  "vpnStartFailed": "Не удалось подключиться к VPN",
+  "vpnStopFailed": "Не удалось остановить VPN"
 }

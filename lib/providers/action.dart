@@ -11,6 +11,7 @@ import 'package:fl_clash/plugins/service.dart';
 import 'package:fl_clash/providers/providers.dart';
 import 'package:fl_clash/state.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -141,15 +142,21 @@ class SetupAction extends _$SetupAction {
 
   Future<void> _handleStart() async {
     _updateTimer?.cancel();
-    startTime ??= DateTime.now();
-    //The local status must be updated when performing the run task
-    ref.read(commonActionProvider.notifier).updateRunTime();
-    ref.read(commonActionProvider.notifier).updateTraffic();
     if (!ref.read(suspendProvider)) {
-      await coreController.startListener();
+      try {
+        if (!await coreController.startListener()) return;
+      } on PlatformException catch (error) {
+        globalState.showNotifier(
+          '${currentAppLocalizations.vpnStartFailed}: ${error.message ?? error.code}',
+        );
+        return;
+      }
     } else {
       await coreController.stopListener();
     }
+    startTime ??= DateTime.now();
+    ref.read(commonActionProvider.notifier).updateRunTime();
+    ref.read(commonActionProvider.notifier).updateTraffic();
     await app?.startBackgroundRunning();
     _updateTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       ref.read(commonActionProvider.notifier).updateRunTime();
@@ -161,12 +168,20 @@ class SetupAction extends _$SetupAction {
     startTime = await service?.getRunTime();
   }
 
-  Future handleStop() async {
+  Future<bool> handleStop() async {
+    try {
+      if (!await coreController.stopListener()) return false;
+    } on PlatformException catch (error) {
+      globalState.showNotifier(
+        '${currentAppLocalizations.vpnStopFailed}: ${error.message ?? error.code}',
+      );
+      return false;
+    }
     startTime = null;
     _updateTimer?.cancel();
     _updateTimer = null;
-    await coreController.stopListener();
     await app?.stopBackgroundRunning();
+    return true;
   }
 
   void handleCrash() {
@@ -221,7 +236,7 @@ class SetupAction extends _$SetupAction {
         }
       }
     } else {
-      await handleStop();
+      if (!await handleStop()) return;
       coreController.resetTraffic();
       ref.read(trafficsProvider.notifier).clear();
       ref.read(totalTrafficProvider.notifier).value = const Traffic();

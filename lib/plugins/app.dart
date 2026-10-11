@@ -65,7 +65,7 @@ class App {
     final path = await methodChannel.invokeMethod<String>('getPackageIcon', {
       'packageName': packageName,
     });
-    if (path == null) {
+    if (path == null || path.isEmpty) {
       return null;
     }
     return FileImage(File(path));

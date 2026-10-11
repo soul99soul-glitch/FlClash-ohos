@@ -4533,6 +4533,26 @@ class AppLocalizations {
       args: [count],
     );
   }
+
+  /// `VPN connection failed`
+  String get vpnStartFailed {
+    return Intl.message(
+      'VPN connection failed',
+      name: 'vpnStartFailed',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Failed to stop VPN`
+  String get vpnStopFailed {
+    return Intl.message(
+      'Failed to stop VPN',
+      name: 'vpnStopFailed',
+      desc: '',
+      args: [],
+    );
+  }
 }
 
 class AppLocalizationDelegate extends LocalizationsDelegate<AppLocalizations> {

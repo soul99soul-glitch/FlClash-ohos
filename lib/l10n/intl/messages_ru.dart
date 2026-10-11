@@ -1113,6 +1113,12 @@ class MessageLookup extends MessageLookupByLibrary {
     "vpnEnableDesc": MessageLookupByLibrary.simpleMessage(
       "Автоматически направляет весь системный трафик через VpnService",
     ),
+    "vpnStartFailed": MessageLookupByLibrary.simpleMessage(
+      "Не удалось подключиться к VPN",
+    ),
+    "vpnStopFailed": MessageLookupByLibrary.simpleMessage(
+      "Не удалось остановить VPN",
+    ),
     "vpnTip": MessageLookupByLibrary.simpleMessage(
       "Изменения вступят в силу после перезапуска VPN",
     ),

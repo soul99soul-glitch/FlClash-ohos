@@ -554,5 +554,7 @@
   "geoSkipped": "{name} スキップ済み",
   "geoUpdated": "{name} 更新済み",
   "secondsCount": "{count} 秒",
-  "entriesCount": "{count} エントリ"
+  "entriesCount": "{count} エントリ",
+  "vpnStartFailed": "VPN 接続に失敗しました",
+  "vpnStopFailed": "VPN の停止に失敗しました"
 }

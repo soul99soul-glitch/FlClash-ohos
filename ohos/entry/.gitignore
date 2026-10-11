@@ -2,6 +2,7 @@
 /oh_modules
 /.preview
 /build
+/libs
 /.cxx
 /.test
 GeneratedPluginRegistrant.ets

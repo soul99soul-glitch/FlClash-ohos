@@ -6,6 +6,8 @@
 
 ## FlClash
 
+本 fork 基于 [tljk/FlClash-ohos](https://github.com/tljk/FlClash-ohos) 继续打磨鸿蒙版本。第一轮改进 VPN 生命周期和 socket 保护，详见[开发与验证说明](HARMONY_DEVELOPMENT.md)。真机验收尚未完成。
+
 [![Downloads](https://img.shields.io/github/downloads/tljk/FlClash-ohos/total?style=flat-square&logo=github)](https://github.com/tljk/FlClash-ohos/releases/)[![Last Version](https://img.shields.io/github/release/tljk/FlClash-ohos/all.svg?style=flat-square)](https://github.com/tljk/FlClash-ohos/releases/)[![License](https://img.shields.io/github/license/tljk/FlClash-ohos?style=flat-square)](LICENSE)
 
 [![Channel](https://img.shields.io/badge/Telegram-Channel-blue?style=flat-square&logo=telegram)](https://t.me/FlClash_ohos)

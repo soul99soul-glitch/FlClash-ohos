@@ -15,6 +15,8 @@ import EntryAbility from '../entryability/EntryAbility';
 export default class ServicePlugin implements FlutterPlugin, MethodCallHandler {
   private parent: EntryAbility
   private channel: MethodChannel | undefined
+  private operation: number = 0
+  private pendingResults: Set<MethodResult> = new Set()
 
   constructor(entryAbility: EntryAbility) {
     this.parent = entryAbility
@@ -63,6 +65,7 @@ export default class ServicePlugin implements FlutterPlugin, MethodCallHandler {
       result.success(err.message ?? `${err}`)
     })
     this.parent.setOnDisconnected((message: string) => {
+      this.failPendingResults(message)
       globalState.runTime = 0
       globalState.runState = RunState.stop
       this.channel?.invokeMethod("crash", message)
@@ -71,6 +74,7 @@ export default class ServicePlugin implements FlutterPlugin, MethodCallHandler {
   }
 
   private handleShutdown(result: MethodResult): void {
+    this.failPendingResults('VPN service is shutting down')
     this.parent.handleShutdown().finally(() => {
       globalState.runTime = 0
       globalState.runState = RunState.stop
@@ -80,7 +84,9 @@ export default class ServicePlugin implements FlutterPlugin, MethodCallHandler {
 
   private handleSyncState(call: MethodCall, result: MethodResult): void {
     globalState.state = JSON.parse(call.args) as State
-    globalState.runState = globalState.runTime === 0 ? RunState.stop : RunState.start
+    if (globalState.runState !== RunState.pending) {
+      globalState.runState = globalState.runTime === 0 ? RunState.stop : RunState.start
+    }
     result.success("")
   }
 
@@ -90,32 +96,64 @@ export default class ServicePlugin implements FlutterPlugin, MethodCallHandler {
   }
 
   private handleStart(result: MethodResult): void {
-    if (globalState.runState === RunState.stop) {
-      globalState.runState = RunState.pending
-      const options = globalState.state?.vpnOptions ?? new VpnOptions()
-      const resultStub = new ResultStub("handleStart", (runTime: number) => {
-        globalState.runTime = runTime
-        globalState.runState = runTime !== 0 ? RunState.start : RunState.stop
-      })
-      this.parent.handleStartService(options, globalState.runTime, resultStub).catch(() => {
-        globalState.runState = RunState.stop
-      })
-    }
-    result.success(true)
+    const operation = ++this.operation
+    this.pendingResults.add(result)
+    globalState.runState = RunState.pending
+    const options = globalState.state?.vpnOptions ?? new VpnOptions()
+    const resultStub = new ResultStub("handleStart", (runTime: number, error: string) => {
+      if (!this.pendingResults.delete(result)) return
+      if (operation !== this.operation) {
+        result.success(false)
+        return
+      }
+      globalState.runTime = runTime
+      globalState.runState = runTime !== 0 ? RunState.start : RunState.stop
+      if (error) result.error('VPN_START_FAILED', error, null)
+      else result.success(runTime !== 0)
+    })
+    this.parent.handleStartService(options, globalState.runTime, resultStub).catch((err: Error) => {
+      if (!this.pendingResults.delete(result)) return
+      if (operation !== this.operation) {
+        result.success(false)
+        return
+      }
+      globalState.runState = RunState.stop
+      result.error('VPN_START_FAILED', err.message ?? `${err}`, null)
+    })
   }
 
   private handleStop(result: MethodResult): void {
-    if (globalState.runState === RunState.start) {
-      globalState.runState = RunState.pending
-      const resultStub = new ResultStub("handleStop", (runTime: number) => {
-        globalState.runTime = runTime
-        globalState.runState = RunState.stop
-      })
-      this.parent.handleStopService(resultStub).catch(() => {
-        globalState.runState = RunState.start
-      })
-    }
-    result.success(true)
+    const operation = ++this.operation
+    this.pendingResults.add(result)
+    globalState.runState = RunState.pending
+    const resultStub = new ResultStub("handleStop", (runTime: number, error: string) => {
+      if (!this.pendingResults.delete(result)) return
+      if (operation !== this.operation) {
+        result.success(false)
+        return
+      }
+      globalState.runTime = runTime
+      globalState.runState = runTime !== 0 ? RunState.start : RunState.stop
+      if (error) result.error('VPN_STOP_FAILED', error, null)
+      else result.success(true)
+    })
+    this.parent.handleStopService(resultStub).catch((err: Error) => {
+      if (!this.pendingResults.delete(result)) return
+      if (operation !== this.operation) {
+        result.success(false)
+        return
+      }
+      globalState.runState = globalState.runTime !== 0 ? RunState.start : RunState.stop
+      result.error('VPN_STOP_FAILED', err.message ?? `${err}`, null)
+    })
+  }
+
+  private failPendingResults(message: string): void {
+    ++this.operation
+    this.pendingResults.forEach((result: MethodResult) => {
+      result.error('VPN_SERVICE_DISCONNECTED', message, null)
+    })
+    this.pendingResults.clear()
   }
 
   private handleGetRunTime(result: MethodResult): void {

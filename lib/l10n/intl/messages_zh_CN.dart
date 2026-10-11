@@ -740,6 +740,8 @@ class MessageLookup extends MessageLookupByLibrary {
     "vpnEnableDesc": MessageLookupByLibrary.simpleMessage(
       "通过VpnService自动路由系统所有流量",
     ),
+    "vpnStartFailed": MessageLookupByLibrary.simpleMessage("VPN 连接失败"),
+    "vpnStopFailed": MessageLookupByLibrary.simpleMessage("VPN 关闭失败"),
     "vpnTip": MessageLookupByLibrary.simpleMessage("重启VPN后改变生效"),
     "webDAVConfiguration": MessageLookupByLibrary.simpleMessage("WebDAV配置"),
     "whitelistMode": MessageLookupByLibrary.simpleMessage("白名单模式"),

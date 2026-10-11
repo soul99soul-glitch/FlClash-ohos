@@ -554,5 +554,7 @@
   "geoSkipped": "{name} skipped",
   "geoUpdated": "{name} updated",
   "secondsCount": "{count} seconds",
-  "entriesCount": "{count} entries"
+  "entriesCount": "{count} entries",
+  "vpnStartFailed": "VPN connection failed",
+  "vpnStopFailed": "Failed to stop VPN"
 }

@@ -854,6 +854,8 @@ class MessageLookup extends MessageLookupByLibrary {
     "vpnEnableDesc": MessageLookupByLibrary.simpleMessage(
       "VpnService経由で全システムトラフィックをルーティング",
     ),
+    "vpnStartFailed": MessageLookupByLibrary.simpleMessage("VPN 接続に失敗しました"),
+    "vpnStopFailed": MessageLookupByLibrary.simpleMessage("VPN の停止に失敗しました"),
     "vpnTip": MessageLookupByLibrary.simpleMessage("変更はVPN再起動後に有効"),
     "webDAVConfiguration": MessageLookupByLibrary.simpleMessage("WebDAV設定"),
     "whitelistMode": MessageLookupByLibrary.simpleMessage("ホワイトリストモード"),

@@ -2,13 +2,13 @@ import { vpnExtension, VpnExtensionAbility, connection } from '@kit.NetworkKit'
 import { Want, bundleManager } from '@kit.AbilityKit'
 import { rpc } from '@kit.IPCKit'
 import { deviceInfo } from '@kit.BasicServicesKit'
-import { util } from '@kit.ArkTS'
 import { setEventListener, invokeAction, startTUN, stopTun, forceGC, suspend, updateDns, quickSetup } from 'core'
 import { AccessControlMode, VpnOptions } from '../models/State'
 import { ChunkedSender, ChunkedReader } from '../utils/Rpc'
 import AbilityConstant from '@ohos.app.ability.AbilityConstant';
 import PowerManager from '../managers/PowerManager'
 import NetworkManager from '../managers/NetworkManager'
+import { VpnLifecycle } from '../managers/VpnLifecycle'
 
 const IPV4_ADDRESS = "172.19.0.1/30"
 const IPV6_ADDRESS = "fdfe:dcba:9876::1/126"
@@ -83,10 +83,13 @@ export class ServiceStub extends rpc.RemoteObject {
 export default class VpnExtAbility extends VpnExtensionAbility {
   private service: ServiceStub | undefined
   private vpnConnection: vpnExtension.VpnConnection | undefined
-  private vpnId: string | undefined
+  private vpnCreated: boolean = false
+  private tunStarted: boolean = false
   private powerManager: PowerManager | undefined
   private networkManager: NetworkManager | undefined
-  private runTime: number = 0
+  private powerSubscribed: boolean = false
+  private networkSubscribed: boolean = false
+  private lifecycle: VpnLifecycle = new VpnLifecycle(() => this.releaseResources())
   private sender: ChunkedSender = new ChunkedSender()
   private uidBundleNameMap: Map<number, string> = new Map<number, string>()
 
@@ -97,9 +100,9 @@ export default class VpnExtAbility extends VpnExtensionAbility {
   }
 
   onDestroy(): void {
-    this.vpnConnection?.destroy()
-    this.powerManager?.unsubscribe()
-    this.networkManager?.unsubscribe()
+    this.lifecycle.stop().catch((err: Error) => {
+      console.log(`Call destroy VPN failed <= ${err.message ?? err}`)
+    })
   }
 
   onConnect(want: Want): rpc.RemoteObject {
@@ -220,12 +223,13 @@ export default class VpnExtAbility extends VpnExtensionAbility {
     this.sender.send(remote, 0, data, null)
   }
 
-  private sendResult(remote: rpc.RemoteObject, runTime: number): void {
+  private sendResult(remote: rpc.RemoteObject, runTime: number, error: string = ''): void {
     const options = new rpc.MessageOption()
     const send = rpc.MessageSequence.create()
     const reply = rpc.MessageSequence.create()
     options.setAsync(false)
     send.writeLong(runTime)
+    send.writeString(error)
     remote.sendMessageRequest(0, send, reply, options).finally(() => {
       send.reclaim()
       reply.reclaim()
@@ -241,57 +245,68 @@ export default class VpnExtAbility extends VpnExtensionAbility {
   }
 
   handleStartService(vpnOptions: VpnOptions, runTime: number, remote: rpc.RemoteObject): void {
-    if (vpnOptions.enable) {
-      const vpnConfig = this.toVpnConfig(vpnOptions)
-      this.vpnConnection?.create(vpnConfig).then((fd: number) => {
-        startTUN(
-          (socketFd: number): Promise<void> => this.vpnConnection?.protect(socketFd).catch((err: Error) => {
-            console.log(`Call protect failed <= ${err.message ?? err}`)
-          }) ?? Promise.resolve(),
+    this.lifecycle.start(async (isCancelled: () => boolean): Promise<void> => {
+      if (vpnOptions.enable) {
+        const vpnConnection = this.vpnConnection
+        if (!vpnConnection) throw new Error('VPN connection is unavailable')
+        const fd = await vpnConnection.create(this.toVpnConfig(vpnOptions))
+        this.vpnCreated = true
+        if (isCancelled()) return
+        this.tunStarted = startTUN(
+          (socketFd: number): Promise<void> => vpnConnection.protect(socketFd),
           (protocol: number, source: string, target: string, uid: number) => this.resolverProcess(protocol, source, target, uid),
           fd,
           vpnOptions.stack,
           this.toTunAddress(vpnOptions),
           this.toTunDns(vpnOptions),
         )
-        if (deviceInfo.sdkApiVersion >= 20) {
-          this.vpnConnection?.generateVpnId().then((vpnId) => { this.vpnId = vpnId })
-        } else {
-          this.vpnId = util.generateRandomUUID(true);
-        }
-        this.powerManager?.subscribe(suspend)
-        this.networkManager?.subscribe(updateDns)
-        this.runTime = runTime !== 0 ? runTime : Date.now()
-      }).catch((err: Error) => {
-        console.log(`Call startTUN failed <= ${err.message ?? err}`)
-      }).finally(() => {
-        this.sendResult(remote, this.runTime)
-      })
-    } else {
-      this.vpnId = undefined
-      this.powerManager?.subscribe(suspend)
-      this.networkManager?.subscribe(updateDns)
-      this.runTime = runTime !== 0 ? runTime : Date.now()
-      this.sendResult(remote, this.runTime)
-    }
+        if (!this.tunStarted) throw new Error('Failed to initialize the VPN tunnel')
+      }
+      if (isCancelled()) return
+      await this.powerManager?.subscribe(suspend)
+      this.powerSubscribed = true
+      if (isCancelled()) return
+      await this.networkManager?.subscribe(updateDns)
+      this.networkSubscribed = true
+    }, runTime).then((startedAt: number) => {
+      this.sendResult(remote, startedAt)
+    }).catch((err: Error) => {
+      this.sendResult(remote, this.lifecycle.runTime, err.message ?? `${err}`)
+    })
   }
 
   handleStopService(remote: rpc.RemoteObject): void {
-    if (this.vpnId) stopTun()
-    this.vpnId = undefined
-    this.vpnConnection?.destroy()
-    this.powerManager?.unsubscribe()
-    this.networkManager?.unsubscribe()
-    this.runTime = 0
-    this.sendResult(remote, this.runTime)
+    this.lifecycle.stop().then(() => {
+      this.sendResult(remote, this.lifecycle.runTime)
+    }).catch((err: Error) => {
+      this.sendResult(remote, this.lifecycle.runTime, err.message ?? `${err}`)
+    })
+  }
+
+  private async releaseResources(): Promise<void> {
+    if (this.tunStarted) {
+      stopTun()
+      this.tunStarted = false
+    }
+    if (this.vpnCreated) {
+      await this.vpnConnection?.destroy()
+      this.vpnCreated = false
+    }
+    if (this.powerSubscribed) {
+      await this.powerManager?.unsubscribe()
+      this.powerSubscribed = false
+    }
+    if (this.networkSubscribed) {
+      await this.networkManager?.unsubscribe()
+      this.networkSubscribed = false
+    }
   }
 
   handleGetRunTime(reply: rpc.MessageSequence): void {
-    reply.writeLong(this.runTime)
+    reply.writeLong(this.lifecycle.runTime)
   }
 
   handleQuickSetup(initParams: string, setupParams: string, remote: rpc.RemoteObject): void {
     quickSetup((callbackData: string) => { this.sendCallback(remote, callbackData) }, initParams, setupParams)
   }
 }
-

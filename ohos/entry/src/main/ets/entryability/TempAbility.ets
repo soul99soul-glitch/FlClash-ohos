@@ -155,9 +155,10 @@ export default class TempAbility extends UIAbility {
     if (globalState.runState === RunState.stop) {
       globalState.runState = RunState.pending
       const options = globalState.state?.vpnOptions ?? new VpnOptions()
-      const resultStub = new ResultStub("handleStart", (runTime: number) => {
+      const resultStub = new ResultStub("handleStart", (runTime: number, error: string) => {
         globalState.runTime = runTime
         globalState.runState = runTime !== 0 ? RunState.start : RunState.stop
+        if (error) console.log(`Call start VPN failed <= ${error}`)
       })
       this.sender.send(remote, RPCType.startService, JSON.stringify(options), (send: rpc.MessageSequence) => {
         send.writeLong(globalState.runTime)

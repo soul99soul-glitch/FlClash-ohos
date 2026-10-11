@@ -554,5 +554,7 @@
   "geoSkipped": "{name} 已跳过",
   "geoUpdated": "{name} 已更新",
   "secondsCount": "{count} 秒",
-  "entriesCount": "{count} 个条目"
+  "entriesCount": "{count} 个条目",
+  "vpnStartFailed": "VPN 连接失败",
+  "vpnStopFailed": "VPN 关闭失败"
 }

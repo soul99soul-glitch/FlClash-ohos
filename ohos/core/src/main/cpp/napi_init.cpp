@@ -31,7 +31,7 @@ struct ResolveProcessCall {
 
 struct ProtectCall {
     int fd;
-    std::promise<void> promise;
+    std::promise<bool> promise;
 };
 
 
@@ -77,12 +77,20 @@ void InvokeActionCallJsCallback(napi_env env, napi_value callback, void* context
     free(data);
 }
 
-static napi_value ProtectCallbackFinal(napi_env env, napi_callback_info info) {
+static napi_value CompleteProtectCall(napi_env env, napi_callback_info info, bool success) {
     void *data = nullptr;
     napi_get_cb_info(env, info, nullptr, nullptr, nullptr, &data);
     ProtectCall *call = reinterpret_cast<ProtectCall*>(data);
-    call->promise.set_value();
+    call->promise.set_value(success);
     return nullptr;
+}
+
+static napi_value ProtectCallbackResolve(napi_env env, napi_callback_info info) {
+    return CompleteProtectCall(env, info, true);
+}
+
+static napi_value ProtectCallbackReject(napi_env env, napi_callback_info info) {
+    return CompleteProtectCall(env, info, false);
 }
 
 void ProtectCallJsCallback(napi_env env, napi_value callback, void *context, void *data) {
@@ -94,9 +102,11 @@ void ProtectCallJsCallback(napi_env env, napi_value callback, void *context, voi
     napi_call_function(env, global, callback, 1, &argv, &result);
     napi_value then = nullptr;
     napi_get_named_property(env, result, "then", &then);
-    napi_value final = nullptr;
-    napi_create_function(env, "onProtectFinal", NAPI_AUTO_LENGTH, ProtectCallbackFinal, call, &final);
-    napi_value thenArgs[2] = {final, final};
+    napi_value resolve = nullptr;
+    napi_value reject = nullptr;
+    napi_create_function(env, "onProtectResolve", NAPI_AUTO_LENGTH, ProtectCallbackResolve, call, &resolve);
+    napi_create_function(env, "onProtectReject", NAPI_AUTO_LENGTH, ProtectCallbackReject, call, &reject);
+    napi_value thenArgs[2] = {resolve, reject};
     napi_value thenResult = nullptr;
     napi_call_function(env, result, then, 2, thenArgs, &thenResult);
 }
@@ -130,8 +140,10 @@ static napi_value StartTUN(napi_env env, napi_callback_info info) {
     TunInterface *tunInterface = new TunInterface();
     napi_create_threadsafe_function(env, argv[0], nullptr, CreateValueStringUtf8(env, "protect"), 0, 1, nullptr, nullptr, nullptr, ProtectCallJsCallback, &tunInterface->protect);
     napi_create_threadsafe_function(env, argv[1], nullptr, CreateValueStringUtf8(env, "resolverProcess"), 0, 1, nullptr, nullptr, nullptr, ResolveProcessCallJsCallback, &tunInterface->resolverProcess);
-    startTUN(tunInterface, GetValueInt32(env, argv[2]), GetValueStringUtf8(env, argv[3]), GetValueStringUtf8(env, argv[4]), GetValueStringUtf8(env, argv[5]));
-    return nullptr;
+    const bool started = startTUN(tunInterface, GetValueInt32(env, argv[2]), GetValueStringUtf8(env, argv[3]), GetValueStringUtf8(env, argv[4]), GetValueStringUtf8(env, argv[5]));
+    napi_value result = nullptr;
+    napi_get_boolean(env, started, &result);
+    return result;
 }
 
 static napi_value QuickSetup(napi_env env, napi_callback_info info) {
@@ -204,12 +216,12 @@ static napi_value UpdateDns(napi_env env, napi_callback_info info) {
     return nullptr;
 }
 
-static void call_tun_interface_protect_impl(void *tun_interface, const int fd) {
+static bool call_tun_interface_protect_impl(void *tun_interface, const int fd) {
     TunInterface *tunInterface = reinterpret_cast<TunInterface*>(tun_interface);
     ProtectCall call{fd, {}};
-    std::future<void> future = call.promise.get_future();
+    std::future<bool> future = call.promise.get_future();
     napi_call_threadsafe_function(tunInterface->protect, &call, napi_tsfn_nonblocking);
-    future.wait();
+    return future.get();
 }
 
 static char *call_tun_interface_resolve_process_impl(void *tun_interface, const int protocol, const char *source, const char *target, const int uid) {
@@ -269,7 +281,7 @@ static napi_value Init(napi_env env, napi_value exports)
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
 
-    protect_func = &call_tun_interface_protect_impl;
+    protect_result_func = &call_tun_interface_protect_impl;
     resolve_process_func = &call_tun_interface_resolve_process_impl;
     result_func = &call_invoke_interface_result_impl;
     release_object_func = &release_object_impl;
